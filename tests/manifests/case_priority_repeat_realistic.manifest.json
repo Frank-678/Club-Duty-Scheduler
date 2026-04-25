@@ -1,0 +1,12 @@
+{
+  "input": "case_priority_repeat_realistic.json",
+  "expected": {
+    "status": "full",
+    "all_filled": true,
+    "summary.open_shift_count": 12,
+    "summary.assigned_shift_count": 12,
+    "summary.unfilled_shift_count": 0,
+    "summary.recommended_max_shifts_per_member": 2,
+    "capacity_advice.advice_type": "too_large"
+  }
+}

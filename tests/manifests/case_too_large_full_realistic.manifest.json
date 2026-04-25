@@ -1,0 +1,12 @@
+{
+  "input": "case_too_large_full_realistic.json",
+  "expected": {
+    "status": "full",
+    "all_filled": true,
+    "summary.open_shift_count": 24,
+    "summary.assigned_shift_count": 24,
+    "summary.unfilled_shift_count": 0,
+    "summary.recommended_max_shifts_per_member": 1,
+    "capacity_advice.advice_type": "too_large"
+  }
+}

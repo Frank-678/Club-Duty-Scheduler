@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>社团值班排班器 V4</title>
+  <style>
+    :root { --bg:#f7f9fc; --card:#fff; --line:#dfe7f1; --text:#1f2a37; --muted:#607089; --primary:#2f6feb; --accent:#eff6ff; --ok:#067647; --warn:#b54708; --danger:#b42318; --slot-count:6; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+    .container { max-width:1440px; margin:0 auto; padding:24px; }
+    h1,h2,h3 { margin:0 0 12px; }
+    .muted { color:var(--muted); margin-bottom:14px; line-height:1.6; }
+    .grid { display:grid; grid-template-columns:390px 1fr; gap:20px; align-items:start; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 6px 18px rgba(17,24,39,.04); margin-bottom:18px; }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+    button { border:0; border-radius:12px; padding:10px 14px; cursor:pointer; background:var(--primary); color:#fff; font-size:14px; }
+    button.secondary { background:#eef4ff; color:var(--primary); }
+    button.ghost { background:#f3f4f6; color:#111827; }
+    button.danger { background:#fee4e2; color:var(--danger); }
+    input[type="text"], input[type="number"], select, textarea { width:100%; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:14px; background:#fff; }
+    textarea { min-height:240px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .field { margin:12px 0; }
+    .field label { display:block; font-weight:600; margin-bottom:6px; }
+    .hint { font-size:12px; color:var(--muted); margin:8px 0; line-height:1.5; }
+    .matrix { display:grid; grid-template-columns:86px repeat(var(--slot-count), minmax(42px, 1fr)); gap:6px; margin-top:8px; overflow:auto; }
+    .matrix > div { padding:8px 6px; border:1px solid var(--line); border-radius:10px; text-align:center; background:#fff; font-size:13px; min-width:42px; }
+    .matrix .header,.matrix .day { background:#f8fbff; font-weight:700; }
+    .member-card { border:1px solid var(--line); border-radius:16px; padding:16px; background:#fcfdff; margin-bottom:14px; }
+    .member-header { display:grid; grid-template-columns:1fr 160px 86px; gap:10px; margin-bottom:12px; }
+    .chip-list { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:13px; }
+    .summary-grid { display:grid; grid-template-columns:repeat(4,minmax(130px,1fr)); gap:12px; margin:14px 0; }
+    .summary-item { border:1px solid var(--line); border-radius:14px; background:var(--accent); padding:12px; }
+    .summary-item strong { display:block; font-size:20px; margin-top:4px; }
+    .notice { border-radius:14px; padding:12px 14px; margin:12px 0; line-height:1.6; }
+    .notice.ok { background:#ecfdf3; color:var(--ok); }
+    .notice.warn { background:#fffaeb; color:var(--warn); }
+    .notice.danger { background:#fef3f2; color:var(--danger); }
+    table { width:100%; border-collapse:collapse; background:#fff; margin-top:14px; font-size:14px; }
+    th,td { border:1px solid var(--line); padding:10px 8px; text-align:center; }
+    th { background:#f8fbff; }
+    .downloads a { display:inline-block; margin-right:12px; color:var(--primary); text-decoration:none; }
+    pre { white-space:pre-wrap; background:#0f172a; color:#e5e7eb; border-radius:14px; padding:14px; overflow:auto; }
+    @media (max-width:1100px) { .grid { grid-template-columns:1fr; } .member-header { grid-template-columns:1fr; } .summary-grid { grid-template-columns:repeat(2,minmax(130px,1fr)); } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>社团值班排班器 V4</h1>
+  <div class="muted">周范围为 1~7，班次范围为 1~6。支持图形化调整开班、成员课表、禁排日期、优先级、每人每周最多排班次数，并自动提示该上限是否过大或过小。</div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>本周排班设置</h2>
+        <div class="field">
+          <label for="maxShiftsPerMember">每人每周最多排班次数</label>
+          <input id="maxShiftsPerMember" type="number" min="1" max="42" step="1" value="1">
+          <div class="hint">系统会先尊重这个上限排班；同时计算推荐值。如果当前值偏大或偏小，会在结果里提示。</div>
+        </div>
+        <h3>开启班次</h3>
+        <div class="hint">勾选 = 该时段开班；不勾选 = 不开班。默认：周二到周日，1~4 班开班；周一和 5~6 班关闭。</div>
+        <div id="openShiftMatrix" class="matrix"></div>
+        <div class="actions">
+          <button class="secondary" type="button" id="weekdayDefaultBtn">恢复默认开班</button>
+          <button class="secondary" type="button" id="openAllShifts">全部开班</button>
+          <button class="ghost" type="button" id="closeAllShifts">全部不开班</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>JSON 导入 / 导出</h2>
+        <textarea id="jsonArea" placeholder="可粘贴 JSON；也可先在右侧表单填写，再点‘导出当前 JSON’。"></textarea>
+        <div class="actions">
+          <button class="secondary" type="button" id="loadJsonBtn">从 JSON 加载</button>
+          <button class="ghost" type="button" id="exportJsonBtn">导出当前 JSON</button>
+          <button class="ghost" type="button" id="loadExampleBtn">载入复杂示例</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>成员信息</h2>
+        <div class="muted">课表：勾选 = 有课/不能值班（1）；不勾选 = 没课/可值班（0）。每人最多排班次数由左侧全局设置控制。</div>
+        <div id="memberList"></div>
+        <div class="actions">
+          <button type="button" id="addMemberBtn">新增成员</button>
+          <button class="secondary" type="button" id="generateBtn">生成排班</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>排班结果</h2>
+        <div id="resultBox" class="muted">还没有生成结果。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS = {{ days|tojson }};
+const SLOTS = {{ slots|tojson }};
+const DAY_NAME = {{ day_name|tojson }};
+document.documentElement.style.setProperty('--slot-count', SLOTS.length);
+
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  Object.entries(attrs).forEach(([k, v]) => {
+    if (k === 'class') node.className = v;
+    else if (k === 'style') node.setAttribute('style', v);
+    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null) node.setAttribute(k, v);
+  });
+  children.forEach(child => node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child));
+  return node;
+}
+
+function makeEmptyDay(value = 0) {
+  const obj = {};
+  SLOTS.forEach(slot => obj[slot] = value);
+  return obj;
+}
+function makeEmptySchedule(value = 0) {
+  const obj = {};
+  DAYS.forEach(day => obj[day] = makeEmptyDay(value));
+  return obj;
+}
+function makeOpenShifts(value = 1) {
+  const obj = {};
+  DAYS.forEach(day => obj[day] = makeEmptyDay(value));
+  return obj;
+}
+
+function weekdayDefaultOpenShifts() {
+  const open = makeOpenShifts(0);
+  ['2','3','4','5'].forEach(day => ['1','2','3','4'].forEach(slot => open[day][slot] = 1));
+  ['6','7'].forEach(day => ['1','2','3','4'].forEach(slot => open[day][slot] = 1));
+  return open;
+}
+
+function renderOpenShiftMatrix(openShifts = weekdayDefaultOpenShifts()) {
+  const box = document.getElementById('openShiftMatrix');
+  box.innerHTML = '';
+  box.appendChild(el('div', {class:'header'}, ['日期/班次']));
+  SLOTS.forEach(slot => box.appendChild(el('div', {class:'header'}, [slot])));
+  DAYS.forEach(day => {
+    box.appendChild(el('div', {class:'day'}, [DAY_NAME[day]]));
+    SLOTS.forEach(slot => {
+      const wrap = el('div');
+      const input = el('input', {type:'checkbox', class:'open-shift', 'data-day':day, 'data-slot':slot});
+      input.checked = (openShifts?.[day]?.[slot] ?? 0) === 1;
+      wrap.appendChild(input);
+      box.appendChild(wrap);
+    });
+  });
+}
+
+function createScheduleMatrix(values = makeEmptySchedule(0)) {
+  const box = el('div', {class:'matrix'});
+  box.appendChild(el('div', {class:'header'}, ['日期/班次']));
+  SLOTS.forEach(slot => box.appendChild(el('div', {class:'header'}, [slot])));
+  DAYS.forEach(day => {
+    box.appendChild(el('div', {class:'day'}, [DAY_NAME[day]]));
+    SLOTS.forEach(slot => {
+      const wrap = el('div');
+      const input = el('input', {type:'checkbox', class:'schedule-cell', 'data-day':day, 'data-slot':slot});
+      input.checked = Boolean(values?.[day]?.[slot] === 1);
+      wrap.appendChild(input);
+      box.appendChild(wrap);
+    });
+  });
+  return box;
+}
+
+function createBanDays(values = []) {
+  const box = el('div', {class:'chip-list'});
+  DAYS.forEach(day => {
+    const label = el('label', {class:'chip'});
+    const input = el('input', {type:'checkbox', class:'ban-day', value:day});
+    input.checked = values.includes(day);
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(DAY_NAME[day]));
+    box.appendChild(label);
+  });
+  return box;
+}
+
+function addMember(member = {}) {
+  const list = document.getElementById('memberList');
+  const card = el('div', {class:'member-card'});
+  const header = el('div', {class:'member-header'});
+  const nameInput = el('input', {type:'text', placeholder:'成员姓名', class:'member-name'});
+  nameInput.value = member.name || '';
+  const priority = el('select', {class:'member-priority'});
+  [['normal','正常'],['prefer_more','优先多排'],['prefer_less','优先少排']].forEach(([v,t]) => {
+    const option = el('option', {value:v}, [t]);
+    if ((member.priority || 'normal') === v) option.selected = true;
+    priority.appendChild(option);
+  });
+  const removeBtn = el('button', {type:'button', class:'danger', onclick:() => card.remove()}, ['删除']);
+  header.appendChild(nameInput);
+  header.appendChild(priority);
+  header.appendChild(removeBtn);
+  card.appendChild(header);
+  card.appendChild(el('div', {class:'hint'}, ['禁排某一天：勾选后，这一天所有班次都不会分配给此成员。']));
+  card.appendChild(createBanDays(member.ban_days || []));
+  card.appendChild(el('div', {class:'hint'}, ['课表：勾选表示有课（1），不勾选表示没课（0）。']));
+  card.appendChild(createScheduleMatrix(member.schedule || makeEmptySchedule(0)));
+  list.appendChild(card);
+}
+
+function collectOpenShifts() {
+  const data = {};
+  DAYS.forEach(day => {
+    data[day] = {};
+    SLOTS.forEach(slot => {
+      const input = document.querySelector(`.open-shift[data-day="${day}"][data-slot="${slot}"]`);
+      data[day][slot] = input && input.checked ? 1 : 0;
+    });
+  });
+  return data;
+}
+
+function collectMembers() {
+  return Array.from(document.querySelectorAll('.member-card')).map(card => {
+    const name = card.querySelector('.member-name').value.trim();
+    const priority = card.querySelector('.member-priority').value;
+    const ban_days = Array.from(card.querySelectorAll('.ban-day')).filter(x => x.checked).map(x => x.value);
+    const schedule = {};
+    DAYS.forEach(day => {
+      schedule[day] = {};
+      SLOTS.forEach(slot => {
+        const input = card.querySelector(`.schedule-cell[data-day="${day}"][data-slot="${slot}"]`);
+        schedule[day][slot] = input && input.checked ? 1 : 0;
+      });
+    });
+    return {name, priority, ban_days, schedule};
+  }).filter(x => x.name);
+}
+
+function buildPayload() {
+  const maxCap = Math.max(1, parseInt(document.getElementById('maxShiftsPerMember').value || '1', 10));
+  return {config:{open_shifts:collectOpenShifts(), max_shifts_per_member:maxCap}, members:collectMembers()};
+}
+
+function fillFormFromPayload(payload) {
+  document.getElementById('maxShiftsPerMember').value = payload?.config?.max_shifts_per_member || 1;
+  renderOpenShiftMatrix(payload?.config?.open_shifts || weekdayDefaultOpenShifts());
+  document.getElementById('memberList').innerHTML = '';
+  (payload.members || []).forEach(m => addMember(m));
+}
+
+function renderResult(data) {
+  const box = document.getElementById('resultBox');
+  const r = data.result;
+  box.innerHTML = '';
+  if (!r) { box.textContent = '没有结果。'; return; }
+  const statusClass = r.status === 'full' ? 'ok' : (r.status === 'partial' ? 'warn' : 'danger');
+  box.appendChild(el('div', {class:`notice ${statusClass}`}, [r.message]));
+  const adviceClass = r.capacity_advice.advice_type === 'ok' ? 'ok' : (r.capacity_advice.advice_type === 'impossible_even_with_more' ? 'danger' : 'warn');
+  box.appendChild(el('div', {class:`notice ${adviceClass}`}, [r.capacity_advice.message]));
+  const summary = el('div', {class:'summary-grid'});
+  [
+    ['状态', r.status],
+    ['成员总数', r.summary.total_members],
+    ['开班数', r.summary.open_shift_count],
+    ['已排数', r.summary.assigned_shift_count],
+    ['空班数', r.summary.unfilled_shift_count],
+    ['填充率', Math.round(r.summary.fill_rate * 100) + '%'],
+    ['用户上限', r.summary.max_shifts_per_member_requested],
+    ['建议上限', r.summary.recommended_max_shifts_per_member],
+    ['实际单人最多', r.summary.max_shifts_used_in_result],
+    ['不开班数', r.summary.closed_shift_count],
+    ['未排成员', r.summary.unassigned_member_count],
+    ['多排后最多可排', r.summary.max_possible_if_more]
+  ].forEach(([k,v]) => {
+    const item = el('div', {class:'summary-item'});
+    item.appendChild(el('div', {}, [k]));
+    item.appendChild(el('strong', {}, [String(v)]));
+    summary.appendChild(item);
+  });
+  box.appendChild(summary);
+  if (data.downloads) {
+    const dl = el('div', {class:'downloads'});
+    if (data.downloads.json) dl.appendChild(el('a', {href:data.downloads.json}, ['下载 JSON']));
+    if (data.downloads.xlsx) dl.appendChild(el('a', {href:data.downloads.xlsx}, ['下载 Excel']));
+    box.appendChild(dl);
+  }
+  const table = el('table');
+  const head = el('tr');
+  head.appendChild(el('th', {}, ['日期/班次']));
+  SLOTS.forEach(s => head.appendChild(el('th', {}, [s])));
+  table.appendChild(el('thead', {}, [head]));
+  const body = el('tbody');
+  DAYS.forEach(day => {
+    const row = el('tr');
+    row.appendChild(el('td', {}, [DAY_NAME[day]]));
+    SLOTS.forEach(slot => row.appendChild(el('td', {}, [String(r.duty_table[day][slot] ?? '')])));
+    body.appendChild(row);
+  });
+  table.appendChild(body);
+  box.appendChild(table);
+
+  const countTable = el('table');
+  const countHead = el('tr');
+  ['成员','排班次数'].forEach(h => countHead.appendChild(el('th', {}, [h])));
+  countTable.appendChild(el('thead', {}, [countHead]));
+  const countBody = el('tbody');
+  Object.entries(r.member_assignment_counts).forEach(([name, count]) => {
+    const row = el('tr');
+    row.appendChild(el('td', {}, [name]));
+    row.appendChild(el('td', {}, [String(count)]));
+    countBody.appendChild(row);
+  });
+  countTable.appendChild(countBody);
+  box.appendChild(countTable);
+
+  const pre = el('pre');
+  pre.textContent = JSON.stringify(r, null, 2);
+  box.appendChild(pre);
+}
+
+function complexExample() {
+  const names = ['张三','李四','王五','赵六','钱七','孙八','周九','吴十','郑一','冯二','陈三','褚四','卫五','蒋六','沈七','韩八','杨九','朱十','秦十一','尤十二'];
+  const priorities = ['prefer_more','normal','prefer_less','normal','prefer_more','normal','normal','prefer_less','normal','prefer_more','normal','normal','prefer_less','normal','prefer_more','normal','normal','normal','prefer_more','normal'];
+  const ban = [['5'],[],['2'],[],['6'],[],['7'],[],['1'],[],['3'],[],['4'],[],[],['6'],[],[],[],['2']];
+  const members = names.map((name, i) => {
+    const schedule = makeEmptySchedule(0);
+    DAYS.forEach((day, di) => SLOTS.forEach((slot, si) => {
+      schedule[day][slot] = ((i + di * 2 + si * 3) % 7 === 0 || (i + di + si) % 11 === 0) ? 1 : 0;
+    }));
+    return {name, priority: priorities[i], ban_days: ban[i], schedule};
+  });
+  return {config:{open_shifts:weekdayDefaultOpenShifts(), max_shifts_per_member:2}, members};
+}
+
+document.getElementById('addMemberBtn').addEventListener('click', () => addMember());
+document.getElementById('exportJsonBtn').addEventListener('click', () => { document.getElementById('jsonArea').value = JSON.stringify(buildPayload(), null, 2); });
+document.getElementById('loadJsonBtn').addEventListener('click', () => {
+  try { fillFormFromPayload(JSON.parse(document.getElementById('jsonArea').value)); } catch(e) { alert('JSON 解析失败：' + e.message); }
+});
+document.getElementById('loadExampleBtn').addEventListener('click', () => { const p = complexExample(); fillFormFromPayload(p); document.getElementById('jsonArea').value = JSON.stringify(p, null, 2); });
+document.getElementById('openAllShifts').addEventListener('click', () => renderOpenShiftMatrix(makeOpenShifts(1)));
+document.getElementById('closeAllShifts').addEventListener('click', () => renderOpenShiftMatrix(makeOpenShifts(0)));
+document.getElementById('weekdayDefaultBtn').addEventListener('click', () => renderOpenShiftMatrix(weekdayDefaultOpenShifts()));
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  const payload = buildPayload();
+  document.getElementById('jsonArea').value = JSON.stringify(payload, null, 2);
+  try {
+    const resp = await fetch('/api/schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || '请求失败');
+    renderResult(data);
+  } catch(e) {
+    document.getElementById('resultBox').innerHTML = `<div class="notice danger">生成失败：${e.message}</div>`;
+  }
+});
+
+renderOpenShiftMatrix(weekdayDefaultOpenShifts());
+addMember();
+</script>
+</body>
+</html>

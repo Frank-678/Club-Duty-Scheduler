@@ -1,0 +1,13 @@
+{
+  "input": "case_too_small_needs_repeat_realistic.json",
+  "expected": {
+    "status": "partial",
+    "all_filled": false,
+    "summary.open_shift_count": 24,
+    "summary.assigned_shift_count": 10,
+    "summary.unfilled_shift_count": 14,
+    "summary.recommended_max_shifts_per_member": 3,
+    "capacity_advice.advice_type": "too_small",
+    "capacity_advice.max_possible_if_more": 24
+  }
+}

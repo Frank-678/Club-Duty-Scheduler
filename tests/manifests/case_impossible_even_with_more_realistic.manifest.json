@@ -1,0 +1,13 @@
+{
+  "input": "case_impossible_even_with_more_realistic.json",
+  "expected": {
+    "status": "partial",
+    "all_filled": false,
+    "summary.open_shift_count": 8,
+    "summary.assigned_shift_count": 6,
+    "summary.unfilled_shift_count": 2,
+    "summary.recommended_max_shifts_per_member": 2,
+    "capacity_advice.advice_type": "impossible_even_with_more",
+    "capacity_advice.max_possible_if_more": 6
+  }
+}
